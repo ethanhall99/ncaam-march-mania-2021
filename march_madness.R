@@ -103,5 +103,6 @@ seasonStats2021 <- gameDetails %>%
 
 TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
-
+write.table(TeamStatsNRankings, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/teamStatsRankings.csv",
+            row.names = FALSE, sep = ",")
 
