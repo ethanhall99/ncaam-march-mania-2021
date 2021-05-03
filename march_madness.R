@@ -16,8 +16,8 @@ files <- list.files(path = base_path, pattern = "*.csv", full.names = TRUE)
 
 # Read all CSVs into data frames
 for (i in files) {
-  v1 <- substr(i, base_path_len+2, nchar(i))
-  name <- substr(v1, 1, nchar(v1)-4)
+  filename <- substr(i, base_path_len+2, nchar(i))
+  name <- substr(filename, 1, nchar(filename)-4)
   assign(name, data.frame(read_csv(i, col_names = TRUE)))
 } 
 
