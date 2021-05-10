@@ -103,6 +103,18 @@ seasonStats2021 <- gameDetails %>%
 
 TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
-# write.table(TeamStatsNRankings, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/teamStatsRankings.csv",
-#            row.names = FALSE, sep = ",")
+# Cross Join
+cross_Teams <- TeamStatsNRankings
+colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
+
+cross_Teams <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
+cross_Teams <- cross_Teams %>%
+  filter(TeamID != OppTeamID)
+
+
+
+
+
+
+
 
