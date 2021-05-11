@@ -3,6 +3,7 @@ library(dplyr)
 library(readr)
 library(tidyr)
 library(tidyverse)
+library(sjmisc)
 
 # Global Variable
 minSeason <- 2021
@@ -112,6 +113,45 @@ cross_Teams <- cross_Teams %>%
   filter(TeamID != OppTeamID)
 
 
+## Aggregate game data
+# Add Week Number
+df <- gameDetails %>%
+  mutate(WeekNum = ceiling(DayNum/7)) %>%
+  move_columns(WeekNum, .before = DayNum)
+
+# aggregate stats from games played prior to that week
+x <- min(df$WeekNum)
+weekly_stats <- data.frame()
+while (x <= max(df$WeekNum)) {
+  holder <- df %>%
+    filter(WeekNum <= x) %>%
+    group_by(TeamID, TeamName, Description, PowerFive, Season) %>%
+    summarise(WeekNum = x,
+              StatsWeekNum = x-1,
+              GP = n(),
+              PF = mean(PF),
+              PA = mean(PA),
+              FGPct = sum(FGM)/sum(FGA)*100,
+              FGM = mean(FGM),
+              FGA = mean(FGA),
+              FG3Pct = sum(FGM3)/sum(FGA3)*100,
+              FGM3 = mean(FGM3),
+              FGA3 = mean(FGA3),
+              FTPct = sum(FTM)/sum(FTA)*100,
+              FTM = mean(FTM),
+              FTA = mean(FTA),
+              Reb = mean(OR)+mean(DR),
+              OReb = mean(OR),
+              DReb = mean(DR),
+              Ast = mean(Ast),
+              TO = mean(TO),
+              Stl = mean(Stl),
+              Blk = mean(Blk))
+  weekly_stats <- bind_rows(weekly_stats, holder)
+  x = x + 1
+}
+
+# know matchups
 
 
 
