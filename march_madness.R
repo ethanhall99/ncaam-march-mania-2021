@@ -3,6 +3,7 @@ library(dplyr)
 library(readr)
 library(tidyr)
 library(tidyverse)
+library(sjmisc)
 
 # Global Variable
 minSeason <- 2021
@@ -16,8 +17,8 @@ files <- list.files(path = base_path, pattern = "*.csv", full.names = TRUE)
 
 # Read all CSVs into data frames
 for (i in files) {
-  v1 <- substr(i, base_path_len+2, nchar(i))
-  name <- substr(v1, 1, nchar(v1)-4)
+  filename <- substr(i, base_path_len+2, nchar(i))
+  name <- substr(filename, 1, nchar(filename)-4)
   assign(name, data.frame(read_csv(i, col_names = TRUE)))
 } 
 
@@ -103,6 +104,57 @@ seasonStats2021 <- gameDetails %>%
 
 TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
-write.table(TeamStatsNRankings, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/teamStatsRankings.csv",
-            row.names = FALSE, sep = ",")
+# Cross Join
+cross_Teams <- TeamStatsNRankings
+colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
+
+cross_Teams <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
+cross_Teams <- cross_Teams %>%
+  filter(TeamID != OppTeamID)
+
+
+## Aggregate game data
+# Add Week Number
+df <- gameDetails %>%
+  mutate(WeekNum = ceiling(DayNum/7)) %>%
+  move_columns(WeekNum, .before = DayNum)
+
+# aggregate stats from games played prior to that week
+x <- min(df$WeekNum)
+weekly_stats <- data.frame()
+while (x <= max(df$WeekNum)) {
+  holder <- df %>%
+    filter(WeekNum <= x) %>%
+    group_by(TeamID, TeamName, Description, PowerFive, Season) %>%
+    summarise(WeekNum = x,
+              StatsWeekNum = x-1,
+              GP = n(),
+              PF = mean(PF),
+              PA = mean(PA),
+              FGPct = sum(FGM)/sum(FGA)*100,
+              FGM = mean(FGM),
+              FGA = mean(FGA),
+              FG3Pct = sum(FGM3)/sum(FGA3)*100,
+              FGM3 = mean(FGM3),
+              FGA3 = mean(FGA3),
+              FTPct = sum(FTM)/sum(FTA)*100,
+              FTM = mean(FTM),
+              FTA = mean(FTA),
+              Reb = mean(OR)+mean(DR),
+              OReb = mean(OR),
+              DReb = mean(DR),
+              Ast = mean(Ast),
+              TO = mean(TO),
+              Stl = mean(Stl),
+              Blk = mean(Blk))
+  weekly_stats <- bind_rows(weekly_stats, holder)
+  x = x + 1
+}
+
+# know matchups
+
+
+
+
+
 
