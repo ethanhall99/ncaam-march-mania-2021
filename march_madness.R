@@ -38,6 +38,15 @@ TeamsConferences <- left_join(TC, MTeams, by = c("TeamID" = "TeamID")) %>%
       select(TeamID, TeamName, Description, PowerFive)
 
 
+help <- MMasseyOrdinals %>%
+  filter(Season >= minSeason) %>%
+  select(-Season) %>%
+  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+
+nullRank <- lapply(help,function(x) { length(which(is.na(x)))})
+
+
+
 # Distinct Ranking Systems in chosen years
 dRankingSystems <- MMasseyOrdinals %>%
   filter(Season >= minSeason) %>%
@@ -47,29 +56,42 @@ dRankingSystems <- MMasseyOrdinals %>%
 # Filter to chosen ranking systems
 RankingSystems <- MMasseyOrdinals %>%
   filter(SystemName %in% chosenRankingSystems,
+         Season >= minSeason,
+         RankingDayNum < max(RankingDayNum)) %>%
+  select(-Season) %>%
+  mutate(RankingWeekNum = ceiling(RankingDayNum/7)) %>%
+  move_columns(RankingWeekNum, .before = RankingDayNum) %>%
+  select(-"RankingDayNum") %>%
+  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+
+
+# Final Rankings
+FinalRankings <- MMasseyOrdinals %>%
+  filter(SystemName %in% chosenRankingSystems,
          Season >= minSeason) %>%
   select(-Season) %>%
   mutate(weekRank = dense_rank(desc(-RankingDayNum)))
 
-FinalRankings <- RankingSystems %>%
+FinalRankings <- FinalRankings %>%
   filter(weekRank == max(weekRank)) %>%
   select(-one_of(c("weekRank", "RankingDayNum"))) %>%
   pivot_wider(names_from = SystemName, values_from = OrdinalRank)
 
 
-gameCols <- c("Season", "DayNum", "TeamID", "WinLoss", "PF", "PA", "NumOT", "FGM", "FGA", "FGM3", "FGA3", "FTM", "FTA", 
+# final game columns
+gameCols <- c("Season", "DayNum", "TeamID", "OppTeamID", "WinLoss", "PF", "PA", "NumOT", "FGM", "FGA", "FGM3", "FGA3", "FTM", "FTA", 
               "OR", "DR", "Ast", "TO", "Stl", "Blk", "Fouls")
 
 # game stats for winning team
 gameWinner <- fMRegularSeasonDetailedResults %>%
-  select("Season", "DayNum", "WTeamID", "WScore", "LScore", "NumOT", "WFGM", "WFGA", "WFGM3", "WFGA3",
+  select("Season", "DayNum", "WTeamID", "LTeamID", "WScore", "LScore", "NumOT", "WFGM", "WFGA", "WFGM3", "WFGA3",
          "WFTM", "WFTA", "WOR", "WDR", "WAst", "WTO", "WStl", "WBlk", "WPF") %>%
   add_column(WinLoss = 1, .before = "WScore")
 colnames(gameWinner) <- gameCols
 
 # game stats for losing team
 gameLoser <- fMRegularSeasonDetailedResults %>%
-  select("Season", "DayNum", "LTeamID", "LScore", "WScore", "NumOT", "LFGM", "LFGA", "LFGM3", "LFGA3",
+  select("Season", "DayNum", "LTeamID", "WTeamID", "LScore", "WScore", "NumOT", "LFGM", "LFGA", "LFGM3", "LFGA3",
          "LFTM", "LFTA", "LOR", "LDR", "LAst", "LTO", "LStl", "LBlk", "LPF") %>%
   add_column(WinLoss = 0, .before = "LScore")
 colnames(gameLoser) <- gameCols
@@ -77,7 +99,9 @@ colnames(gameLoser) <- gameCols
 # Combine Win and Loss
 games <- bind_rows(gameWinner, gameLoser)
 
-gameDetails <- left_join(TeamsConferences, games, by = c("TeamID" = "TeamID"))
+gameDetails <- left_join(TeamsConferences, games, by = c("TeamID" = "TeamID")) %>%
+  mutate(WeekNum = ceiling(DayNum/7)) %>%
+  move_columns(WeekNum, .before = DayNum)
 
 seasonStats2021 <- gameDetails %>%
   group_by(TeamID, TeamName, Description, PowerFive) %>%
@@ -108,26 +132,25 @@ TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" 
 cross_Teams <- TeamStatsNRankings
 colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
 
+drop_cols <- c('TeamName', 'Description', 'OppTeamName', 'OppDescription')
+
 cross_Teams <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
 cross_Teams <- cross_Teams %>%
-  filter(TeamID != OppTeamID)
+  filter(TeamID != OppTeamID) %>%
+  select(-drop_cols)
+  
 
 
-## Aggregate game data
-# Add Week Number
-df <- gameDetails %>%
-  mutate(WeekNum = ceiling(DayNum/7)) %>%
-  move_columns(WeekNum, .before = DayNum)
 
 # aggregate stats from games played prior to that week
 x <- min(df$WeekNum)
 weekly_stats <- data.frame()
 while (x <= max(df$WeekNum)) {
-  holder <- df %>%
+  holder <- gameDetails %>%
     filter(WeekNum <= x) %>%
     group_by(TeamID, TeamName, Description, PowerFive, Season) %>%
     summarise(WeekNum = x,
-              StatsWeekNum = x-1,
+              StatsWeekNum = x+1,
               GP = n(),
               PF = mean(PF),
               PA = mean(PA),
@@ -151,8 +174,22 @@ while (x <= max(df$WeekNum)) {
   x = x + 1
 }
 
-# know matchups
+weekly_stats <- weekly_stats %>%
+  select(-c('TeamName', 'Description', 'WeekNum', 'Season'))
 
+opp_weekly_stats <- weekly_stats
+colnames(opp_weekly_stats) <- paste("Opp", colnames(opp_weekly_stats), sep = "")
+  
+
+
+
+# know matchups
+matchups <- gameDetails %>%
+  select(WinLoss, WeekNum, TeamID, OppTeamID)
+  
+# Join winning team data
+matchups <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum"))
+matchups <- inner_join(matchups, opp_weekly_stats, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum"))
 
 
 
