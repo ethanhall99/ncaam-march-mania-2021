@@ -141,8 +141,8 @@ colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
 
 drop_cols <- c('TeamName', 'Description', 'OppTeamName', 'OppDescription')
 
-cross_Teams <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
-cross_Teams <- cross_Teams %>%
+allPossibleMatchups <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
+allPossibleMatchups <- allPossibleMatchups %>%
   filter(TeamID != OppTeamID) %>%
   select(-drop_cols)
   
