@@ -7,7 +7,7 @@ library(sjmisc)
 
 # Global Variable
 minSeason <- 2021
-chosenRankingSystems <- c("NET", "TRP", "POM")
+
 
 
 # Create list of file paths for CSVs
@@ -38,15 +38,6 @@ TeamsConferences <- left_join(TC, MTeams, by = c("TeamID" = "TeamID")) %>%
       select(TeamID, TeamName, Description, PowerFive)
 
 
-help <- MMasseyOrdinals %>%
-  filter(Season >= minSeason) %>%
-  select(-Season) %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
-
-nullRank <- lapply(help,function(x) { length(which(is.na(x)))})
-
-
-
 # Distinct Ranking Systems in chosen years
 dRankingSystems <- MMasseyOrdinals %>%
   filter(Season >= minSeason) %>%
@@ -54,6 +45,22 @@ dRankingSystems <- MMasseyOrdinals %>%
 
 
 # Filter to chosen ranking systems
+# select systems with rankings every week
+fullRankings2021 <- MMasseyOrdinals %>%
+  filter(Season >= minSeason) %>%
+  select(-Season) %>%
+  pivot_wider(names_from = SystemName, values_from = OrdinalRank) %>%
+  select_if(~ !any(is.na(.)))
+
+# get system names
+fullRankingSystems <- colnames(fullRankings2021)
+fullRankingSystems <- fullRankingSystems[-c(1, 2)] 
+print(fullRankingSystems)
+
+# Ranking System Options
+#chosenRankingSystems <- c("NET", "TRP", "POM")
+chosenRankingSystems <- fullRankingSystems
+
 RankingSystems <- MMasseyOrdinals %>%
   filter(SystemName %in% chosenRankingSystems,
          Season >= minSeason,
