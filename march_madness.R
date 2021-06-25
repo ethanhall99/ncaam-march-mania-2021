@@ -45,44 +45,23 @@ dRankingSystems <- MMasseyOrdinals %>%
 
 
 # Filter to chosen ranking systems
+dayADJ <- 22
 # select systems with rankings every week
-fullRankings2021 <- MMasseyOrdinals %>%
+RankingSystems <- MMasseyOrdinals %>%
   filter(Season >= minSeason) %>%
   select(-Season) %>%
   pivot_wider(names_from = SystemName, values_from = OrdinalRank) %>%
-  select_if(~ !any(is.na(.)))
-
-# get system names
-fullRankingSystems <- colnames(fullRankings2021)
-fullRankingSystems <- fullRankingSystems[-c(1, 2)] 
-print(fullRankingSystems)
-
-# Ranking System Options
-#chosenRankingSystems <- c("NET", "TRP", "POM")
-chosenRankingSystems <- fullRankingSystems
-
-RankingSystems <- MMasseyOrdinals %>%
-  filter(SystemName %in% chosenRankingSystems,
-         Season >= minSeason,
-         RankingDayNum < max(RankingDayNum)) %>%
-  select(-Season) %>%
+  select_if(~ !any(is.na(.))) %>%
+  mutate(RankingDayNum = RankingDayNum - dayADJ) %>%
   mutate(RankingWeekNum = ceiling(RankingDayNum/7)) %>%
-  move_columns(RankingWeekNum, .before = RankingDayNum) %>%
-  select(-"RankingDayNum") %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+  move_columns(RankingWeekNum, .before = RankingDayNum)
 
 
 # Final Rankings
-FinalRankings <- MMasseyOrdinals %>%
-  filter(SystemName %in% chosenRankingSystems,
-         Season >= minSeason) %>%
-  select(-Season) %>%
-  mutate(weekRank = dense_rank(desc(-RankingDayNum)))
-
-FinalRankings <- FinalRankings %>%
-  filter(weekRank == max(weekRank)) %>%
-  select(-one_of(c("weekRank", "RankingDayNum"))) %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+FinalRankings <- RankingSystems %>%
+  filter(RankingDayNum == max(RankingDayNum)) %>%
+  mutate(RankingWeekNum = RankingWeekNum + 1) %>%
+  select(-c("RankingWeekNum", "RankingDayNum"))
 
 
 # final game columns
@@ -107,6 +86,7 @@ colnames(gameLoser) <- gameCols
 games <- bind_rows(gameWinner, gameLoser)
 
 gameDetails <- left_join(TeamsConferences, games, by = c("TeamID" = "TeamID")) %>%
+  mutate(DayNum = DayNum - dayADJ) %>%
   mutate(WeekNum = ceiling(DayNum/7)) %>%
   move_columns(WeekNum, .before = DayNum)
 
@@ -133,10 +113,10 @@ seasonStats2021 <- gameDetails %>%
             Stl = mean(Stl),
             Blk = mean(Blk))
 
-TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
+allPossibleMatchups <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
 # Cross Join
-cross_Teams <- TeamStatsNRankings
+cross_Teams <- allPossibleMatchups
 colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
 
 drop_cols <- c('TeamName', 'Description', 'OppTeamName', 'OppDescription')
