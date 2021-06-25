@@ -150,9 +150,9 @@ allPossibleMatchups <- allPossibleMatchups %>%
 
 
 # aggregate stats from games played prior to that week
-x <- min(df$WeekNum)
+x <- min(gameDetails$WeekNum)
 weekly_stats <- data.frame()
-while (x <= max(df$WeekNum)) {
+while (x <= max(gameDetails$WeekNum)) {
   holder <- gameDetails %>%
     filter(WeekNum <= x) %>%
     group_by(TeamID, TeamName, Description, PowerFive, Season) %>%
