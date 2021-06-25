@@ -182,7 +182,7 @@ while (x <= max(gameDetails$WeekNum)) {
 }
 
 weekly_stats <- weekly_stats %>%
-  select(-c('TeamName', 'Description', 'WeekNum', 'Season'))
+  select(-c('WeekNum', 'Season'))
 
 opp_weekly_stats <- weekly_stats
 colnames(opp_weekly_stats) <- paste("Opp", colnames(opp_weekly_stats), sep = "")
@@ -195,8 +195,10 @@ matchups <- gameDetails %>%
   select(WinLoss, WeekNum, TeamID, OppTeamID)
   
 # Join winning team data
-matchups <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum"))
-matchups <- inner_join(matchups, opp_weekly_stats, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum"))
+matchups <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum")) %>%
+  move_columns(OppTeamID, .after = Blk)
+matchups <- inner_join(matchups, opp_weekly_stats, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum")) %>%
+  select(-c('WeekNum'))
 
 
 
