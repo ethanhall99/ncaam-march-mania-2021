@@ -7,7 +7,7 @@ library(sjmisc)
 
 # Global Variable
 minSeason <- 2021
-chosenRankingSystems <- c("NET", "TRP", "POM")
+
 
 
 # Create list of file paths for CSVs
@@ -38,15 +38,6 @@ TeamsConferences <- left_join(TC, MTeams, by = c("TeamID" = "TeamID")) %>%
       select(TeamID, TeamName, Description, PowerFive)
 
 
-help <- MMasseyOrdinals %>%
-  filter(Season >= minSeason) %>%
-  select(-Season) %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
-
-nullRank <- lapply(help,function(x) { length(which(is.na(x)))})
-
-
-
 # Distinct Ranking Systems in chosen years
 dRankingSystems <- MMasseyOrdinals %>%
   filter(Season >= minSeason) %>%
@@ -54,28 +45,28 @@ dRankingSystems <- MMasseyOrdinals %>%
 
 
 # Filter to chosen ranking systems
+dayADJ <- min(fMRegularSeasonDetailedResults$DayNum) - 1
+# select systems with rankings every week
 RankingSystems <- MMasseyOrdinals %>%
-  filter(SystemName %in% chosenRankingSystems,
-         Season >= minSeason,
-         RankingDayNum < max(RankingDayNum)) %>%
+  filter(Season >= minSeason) %>%
   select(-Season) %>%
+  pivot_wider(names_from = SystemName, values_from = OrdinalRank) %>%
+  select_if(~ !any(is.na(.))) %>%
+  mutate(RankingDayNum = RankingDayNum - dayADJ) %>%
   mutate(RankingWeekNum = ceiling(RankingDayNum/7)) %>%
-  move_columns(RankingWeekNum, .before = RankingDayNum) %>%
-  select(-"RankingDayNum") %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+  move_columns(RankingWeekNum, .before = RankingDayNum) 
 
 
 # Final Rankings
-FinalRankings <- MMasseyOrdinals %>%
-  filter(SystemName %in% chosenRankingSystems,
-         Season >= minSeason) %>%
-  select(-Season) %>%
-  mutate(weekRank = dense_rank(desc(-RankingDayNum)))
+FinalRankings <- RankingSystems %>%
+  filter(RankingDayNum == max(RankingDayNum)) %>%
+  mutate(RankingWeekNum = RankingWeekNum + 1) %>%
+  select(-c("RankingWeekNum", "RankingDayNum"))
 
-FinalRankings <- FinalRankings %>%
-  filter(weekRank == max(weekRank)) %>%
-  select(-one_of(c("weekRank", "RankingDayNum"))) %>%
-  pivot_wider(names_from = SystemName, values_from = OrdinalRank)
+
+RankingSystems <- RankingSystems %>%
+  filter(RankingDayNum != 111) %>%
+  select(-c("RankingDayNum"))
 
 
 # final game columns
@@ -100,6 +91,7 @@ colnames(gameLoser) <- gameCols
 games <- bind_rows(gameWinner, gameLoser)
 
 gameDetails <- left_join(TeamsConferences, games, by = c("TeamID" = "TeamID")) %>%
+  mutate(DayNum = DayNum - dayADJ) %>%
   mutate(WeekNum = ceiling(DayNum/7)) %>%
   move_columns(WeekNum, .before = DayNum)
 
@@ -126,16 +118,16 @@ seasonStats2021 <- gameDetails %>%
             Stl = mean(Stl),
             Blk = mean(Blk))
 
-TeamStatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
+StatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
 # Cross Join
-cross_Teams <- TeamStatsNRankings
-colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
+allPossibleMatchups <- StatsNRankings
+colnames(allPossibleMatchups) <- paste("Opp", colnames(allPossibleMatchups), sep = "")
 
 drop_cols <- c('TeamName', 'Description', 'OppTeamName', 'OppDescription')
 
-cross_Teams <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
-cross_Teams <- cross_Teams %>%
+allPossibleMatchups <- merge(StatsNRankings, allPossibleMatchups, all=TRUE)
+allPossibleMatchups <- allPossibleMatchups %>%
   filter(TeamID != OppTeamID) %>%
   select(-drop_cols)
   
@@ -143,9 +135,9 @@ cross_Teams <- cross_Teams %>%
 
 
 # aggregate stats from games played prior to that week
-x <- min(df$WeekNum)
+x <- min(gameDetails$WeekNum)
 weekly_stats <- data.frame()
-while (x <= max(df$WeekNum)) {
+while (x <= max(gameDetails$WeekNum)) {
   holder <- gameDetails %>%
     filter(WeekNum <= x) %>%
     group_by(TeamID, TeamName, Description, PowerFive, Season) %>%
@@ -174,24 +166,32 @@ while (x <= max(df$WeekNum)) {
   x = x + 1
 }
 
-weekly_stats <- weekly_stats %>%
-  select(-c('TeamName', 'Description', 'WeekNum', 'Season'))
+weekly_statsNrank <- inner_join(weekly_stats, RankingSystems, by = c("TeamID" = "TeamID", "WeekNum" = "RankingWeekNum")) %>%
+  select(-c('WeekNum', 'Season'))
 
-opp_weekly_stats <- weekly_stats
-colnames(opp_weekly_stats) <- paste("Opp", colnames(opp_weekly_stats), sep = "")
+
+opp_weekly_statsNrank <- weekly_statsNrank
+colnames(opp_weekly_statsNrank) <- paste("Opp", colnames(opp_weekly_statsNrank), sep = "")
   
-
-
 
 # know matchups
 matchups <- gameDetails %>%
   select(WinLoss, WeekNum, TeamID, OppTeamID)
   
 # Join winning team data
-matchups <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum"))
-matchups <- inner_join(matchups, opp_weekly_stats, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum"))
+matchups <- inner_join(matchups, weekly_statsNrank, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum")) %>%
+  move_columns(OppTeamID, .after = WIL)
+matchups <- inner_join(matchups, opp_weekly_statsNrank, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum")) %>%
+  select(-c('WeekNum'))
 
 
 
+# write All Possible Matchups
+write.table(allPossibleMatchups, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/allPossibleMatchups.csv",
+            row.names = FALSE, sep = ",")
+
+# write Matchup Train/Test
+write.table(matchups, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/matchupTestTrain.csv",
+            row.names = FALSE, sep = ",")
 
 
