@@ -65,7 +65,8 @@ FinalRankings <- RankingSystems %>%
 
 
 RankingSystems <- RankingSystems %>%
-  filter(RankingDayNum != 111)
+  filter(RankingDayNum != 111) %>%
+  select(-c("RankingDayNum"))
 
 
 # final game columns
@@ -165,28 +166,32 @@ while (x <= max(gameDetails$WeekNum)) {
   x = x + 1
 }
 
-weekly_statsNrank <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum"))
-
-weekly_stats <- weekly_stats %>%
+weekly_statsNrank <- inner_join(weekly_stats, RankingSystems, by = c("TeamID" = "TeamID", "WeekNum" = "RankingWeekNum")) %>%
   select(-c('WeekNum', 'Season'))
 
-opp_weekly_stats <- weekly_stats
-colnames(opp_weekly_stats) <- paste("Opp", colnames(opp_weekly_stats), sep = "")
+
+opp_weekly_statsNrank <- weekly_statsNrank
+colnames(opp_weekly_statsNrank) <- paste("Opp", colnames(opp_weekly_statsNrank), sep = "")
   
-
-
 
 # know matchups
 matchups <- gameDetails %>%
   select(WinLoss, WeekNum, TeamID, OppTeamID)
   
 # Join winning team data
-matchups <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum")) %>%
-  move_columns(OppTeamID, .after = Blk)
-matchups <- inner_join(matchups, opp_weekly_stats, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum")) %>%
+matchups <- inner_join(matchups, weekly_statsNrank, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum")) %>%
+  move_columns(OppTeamID, .after = WIL)
+matchups <- inner_join(matchups, opp_weekly_statsNrank, by = c("OppTeamID" = "OppTeamID", "WeekNum" = "OppStatsWeekNum")) %>%
   select(-c('WeekNum'))
 
 
 
+# write All Possible Matchups
+write.table(allPossibleMatchups, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/allPossibleMatchups.csv",
+            row.names = FALSE, sep = ",")
+
+# write Matchup Train/Test
+write.table(matchups, file = "/Users/ethanhall/Desktop/Data/ncaam-march-mania-2021/matchupTestTrain.csv",
+            row.names = FALSE, sep = ",")
 
 
