@@ -45,7 +45,7 @@ dRankingSystems <- MMasseyOrdinals %>%
 
 
 # Filter to chosen ranking systems
-dayADJ <- 22
+dayADJ <- min(fMRegularSeasonDetailedResults$DayNum) - 1
 # select systems with rankings every week
 RankingSystems <- MMasseyOrdinals %>%
   filter(Season >= minSeason) %>%
@@ -54,7 +54,7 @@ RankingSystems <- MMasseyOrdinals %>%
   select_if(~ !any(is.na(.))) %>%
   mutate(RankingDayNum = RankingDayNum - dayADJ) %>%
   mutate(RankingWeekNum = ceiling(RankingDayNum/7)) %>%
-  move_columns(RankingWeekNum, .before = RankingDayNum)
+  move_columns(RankingWeekNum, .before = RankingDayNum) 
 
 
 # Final Rankings
@@ -62,6 +62,10 @@ FinalRankings <- RankingSystems %>%
   filter(RankingDayNum == max(RankingDayNum)) %>%
   mutate(RankingWeekNum = RankingWeekNum + 1) %>%
   select(-c("RankingWeekNum", "RankingDayNum"))
+
+
+RankingSystems <- RankingSystems %>%
+  filter(RankingDayNum != 111)
 
 
 # final game columns
@@ -113,15 +117,15 @@ seasonStats2021 <- gameDetails %>%
             Stl = mean(Stl),
             Blk = mean(Blk))
 
-allPossibleMatchups <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
+StatsNRankings <- left_join(seasonStats2021, FinalRankings, by = c("TeamID" = "TeamID"))
 
 # Cross Join
-cross_Teams <- allPossibleMatchups
-colnames(cross_Teams) <- paste("Opp", colnames(cross_Teams), sep = "")
+allPossibleMatchups <- StatsNRankings
+colnames(allPossibleMatchups) <- paste("Opp", colnames(allPossibleMatchups), sep = "")
 
 drop_cols <- c('TeamName', 'Description', 'OppTeamName', 'OppDescription')
 
-allPossibleMatchups <- merge(TeamStatsNRankings, cross_Teams, all=TRUE)
+allPossibleMatchups <- merge(StatsNRankings, allPossibleMatchups, all=TRUE)
 allPossibleMatchups <- allPossibleMatchups %>%
   filter(TeamID != OppTeamID) %>%
   select(-drop_cols)
@@ -160,6 +164,8 @@ while (x <= max(gameDetails$WeekNum)) {
   weekly_stats <- bind_rows(weekly_stats, holder)
   x = x + 1
 }
+
+weekly_statsNrank <- inner_join(matchups, weekly_stats, by = c("TeamID" = "TeamID", "WeekNum" = "StatsWeekNum"))
 
 weekly_stats <- weekly_stats %>%
   select(-c('WeekNum', 'Season'))
